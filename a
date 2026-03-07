@@ -1,0 +1,4 @@
+require('./logger')
+
+E486: Pattern not found: \v\C%(\MRequire('logger')\|require('logger')\|REQUIRE('LOGGER')\v)
+substitute/\v\C%(\MRequire('logger')\|require('logger')\|REQUIRE('LOGGER')\v)/\=Abolished()/

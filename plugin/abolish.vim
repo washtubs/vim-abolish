@@ -346,6 +346,7 @@ function! s:normalize_options(flags)
     let opts.boundaries = 0
   endif
   let opts.case = (flags !~# 'I' ? get(opts,'case',1) : 0)
+  let opts.magic = (flags !~# 'M' ? get(opts,'magic',1) : 0)
   let opts.flags = substitute(flags,'\C[avIiw]','','g')
   return opts
 endfunction
@@ -367,18 +368,25 @@ function! s:sort(a,b)
   endif
 endfunction
 
-function! s:pattern(dict,boundaries)
-  if a:boundaries == 2
+function! s:pattern(dict,opts)
+  if a:opts.boundaries == 2
     let a = '<'
     let b = '>'
-  elseif a:boundaries
+  elseif a:opts.boundaries
     let a = '%(<|_@<=|[[:lower:]]@<=[[:upper:]]@=)'
     let b =  '%(>|_@=|[[:lower:]]@<=[[:upper:]]@=)'
   else
     let a = ''
     let b = ''
   endif
-  return '\v\C'.a.'%('.join(map(sort(keys(a:dict),function('s:sort')),'s:subesc(v:val)'),'|').')'.b
+  " \C forces case sensitivity
+  echom "magic opt"
+  echom get(a:opts,'magic',1)
+  if get(a:opts,'magic',1) == 0
+    return '\v\C'.a.'%(\M'.join(sort(keys(a:dict),function('s:sort')),'\|').'\v)'.b
+  else
+    return '\v\C'.a.'%('.join(map(sort(keys(a:dict),function('s:sort')),'s:subesc(v:val)'),'|').')'.b
+  endif
 endfunction
 
 function! s:egrep_pattern(dict,boundaries)
@@ -408,7 +416,7 @@ function! s:find_command(cmd,flags,word)
   " If we use :norm /pattern, we leave ourselves vulnerable to "press enter"
   " prompts (even with :silent).
   let cmd = (a:cmd =~ '[?!]$' ? '?' : '/')
-  let @/ = s:pattern(dict,opts.boundaries)
+  let @/ = s:pattern(dict,opts)
   if opts.flags == "" || !search(@/,'n')
     return "norm! ".cmd."\<CR>"
   elseif opts.flags =~ ';[/?]\@!'
@@ -423,7 +431,7 @@ function! s:grep_command(args,bang,flags,word)
   let opts = s:normalize_options(a:flags)
   let dict = s:create_dictionary(a:word,"",opts)
   if &grepprg == "internal"
-    let lhs = "'".s:pattern(dict,opts.boundaries)."'"
+    let lhs = "'".s:pattern(dict,opts)."'"
   elseif &grepprg =~# '^rg\|^ag'
     let lhs = "'".s:egrep_pattern(dict,opts.boundaries)."'"
   else
@@ -462,16 +470,18 @@ endfunction
 function! s:substitute_command(cmd,bad,good,flags)
   let opts = s:normalize_options(a:flags)
   let dict = s:create_dictionary(a:bad,a:good,opts)
-  let lhs = s:pattern(dict,opts.boundaries)
+  echom opts
+  let lhs = s:pattern(dict,opts)
   let g:abolish_last_dict = dict
-  " echom dict
-  " echom lhs
-  " echom opts.boundaries
-  " echom a:cmd.'/'.lhs.'/\=Abolished()'."/".opts.flags
-  return a:cmd.'/'.lhs.'/\=Abolished()'."/".opts.flags
+  echom dict
+  echom lhs
+  echom opts.boundaries
+  echom a:cmd.'/'.lhs.'/\=Abolished()'."/".substitute(opts.flags, 'M', '', 'g')
+  return a:cmd.'/'.lhs.'/\=Abolished()'."/".substitute(opts.flags, 'M', '', 'g')
 endfunction
 
 function! s:parse_substitute(bang,line1,line2,count,args)
+  echom "hi"
   if get(a:args,0,'') =~ '^[/?'']'
     let separator = matchstr(a:args[0],'^.')
     let args = split(join(a:args,' '),separator,1)
@@ -490,11 +500,12 @@ function! s:parse_substitute(bang,line1,line2,count,args)
   else
     let cmd = a:line1.",".a:line2."substitute"
   endif
+  echom "hi"
   return s:substitute_command(cmd,bad,good,flags)
 endfunction
 
 let s:commands.substitute = s:commands.abstract.clone()
-let s:commands.substitute.options = {"word": 0, "variable": 0, "flags": "g"}
+let s:commands.substitute.options = {"word": 0, "variable": 0, "flags": "g", "magic": 0}
 
 function! s:commands.substitute.process(bang,line1,line2,count,args)
   call s:extractopts(a:args,self.options)
@@ -502,6 +513,9 @@ function! s:commands.substitute.process(bang,line1,line2,count,args)
     let self.options.flags .= "w"
   elseif self.options.variable
     let self.options.flags .= "v"
+  endif
+  if self.options.magic
+    let self.options.flags .= "M"
   endif
   let opts = s:normalize_options(self.options)
   if len(a:args) <= 1
