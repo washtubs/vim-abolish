@@ -117,6 +117,14 @@ function! s:camelcase(word)
   endif
 endfunction
 
+function! s:snakecasenolower(word)
+  let word = substitute(a:word,'::','/','g')
+  let word = substitute(word,'\(\u\+\)\(\u\l\)','\1_\2','g')
+  let word = substitute(word,'\(\l\|\d\)\(\u\)','\1_\2','g')
+  let word = substitute(word,'[.-]','_','g')
+  return word
+endfunction
+
 function! s:snakecase(word)
   let word = substitute(a:word,'::','/','g')
   let word = substitute(word,'\(\u\+\)\(\u\l\)','\1_\2','g')
@@ -134,6 +142,22 @@ function! s:dashcase(word)
   return substitute(s:snakecase(a:word),'_','-','g')
 endfunction
 
+" Space case but the first word is capital
+function! s:capitalspacecase(word)
+  return substitute(s:spacecase(a:word),'^.','\u&','')
+endfunction
+
+" Space case but all the words are capitalized
+function! s:mixedspacecase(word)
+  return substitute(s:snakecasenolower(s:mixedcase(a:word)),'_',' ','g')
+endfunction
+
+" Space case but the first word is uncapitalized and the remainder are
+function! s:camelspacecase(word)
+  return substitute(s:snakecasenolower(s:camelcase(a:word)),'_',' ','g')
+endfunction
+
+" Lower space case
 function! s:spacecase(word)
   return substitute(s:snakecase(a:word),'_',' ','g')
 endfunction
@@ -159,6 +183,11 @@ function! s:create_dictionary(lhs,rhs,opts)
   for [lhs,rhs] in items(expanded)
     if get(a:opts,'case',1)
       let dictionary[s:mixedcase(lhs)] = s:mixedcase(rhs)
+      let dictionary[s:spacecase(lhs)] = s:spacecase(rhs)
+      let dictionary[s:capitalspacecase(lhs)] = s:capitalspacecase(rhs)
+      let dictionary[s:mixedspacecase(lhs)] = s:mixedspacecase(rhs)
+      let dictionary[s:camelspacecase(lhs)] = s:camelspacecase(rhs)
+      let dictionary[toupper(s:spacecase(lhs))] = toupper(s:spacecase(rhs))
       let dictionary[tolower(lhs)] = tolower(rhs)
       let dictionary[toupper(lhs)] = toupper(rhs)
     endif
@@ -434,6 +463,10 @@ function! s:substitute_command(cmd,bad,good,flags)
   let dict = s:create_dictionary(a:bad,a:good,opts)
   let lhs = s:pattern(dict,opts.boundaries)
   let g:abolish_last_dict = dict
+  " echom dict
+  " echom lhs
+  " echom opts.boundaries
+  " echom a:cmd.'/'.lhs.'/\=Abolished()'."/".opts.flags
   return a:cmd.'/'.lhs.'/\=Abolished()'."/".opts.flags
 endfunction
 
